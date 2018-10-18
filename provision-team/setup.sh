@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 # set -euo pipefail
 IFS=$'\n\t'
@@ -18,9 +19,10 @@ declare chatConnectionString=""
 declare chatMessageQueue=""
 declare provisioningVMIpaddress=""
 declare bingAPIkey=""
+declare azureTenant=""
 
 # Initialize parameters specified from command line
-while getopts ":c:i:l:n:e:q:r:u:p:j:" arg; do
+while getopts ":c:i:l:n:e:q:r:u:p:j:t:" arg; do
     case "${arg}" in
         c)
             chatConnectionString=${OPTARG}
@@ -52,6 +54,9 @@ while getopts ":c:i:l:n:e:q:r:u:p:j:" arg; do
         j)
             bingAPIkey=${OPTARG}
         ;;
+	t)
+		azureTenant=${OPTARG}
+	;;
     esac
 done
 shift $((OPTIND-1))
@@ -138,6 +143,8 @@ declare registryName="${teamName}${teamNumber}acr"
 declare clusterName="${teamName}${teamNumber}aks"
 declare keyVaultName="${teamName}${teamNumber}kv"
 declare sqlServerName="${teamName}${teamNumber}sql"
+declare hostingPlanName="${teamName}${teamNumber}plan"
+declare mobileAppName="${teamName}${teamNumber}app"
 declare sqlServerUsername="${teamName}${teamNumber}sa"
 declare sqlServerPassword="$(randomChar;randomCharUpper;randomNum;randomChar;randomChar;randomNum;randomCharUpper;randomChar;randomNum)pwd"
 declare sqlDBName="mydrivingDB"
@@ -160,6 +167,8 @@ echo "sqlServerName             = "${sqlServerName}
 echo "sqlServerUsername         = "${sqlServerUsername}
 echo "sqlServerPassword         = "${sqlServerPassword}
 echo "sqlDBName                 = "${sqlDBName}
+echo "hostingPlanName           = "${hostingPlanName}
+echo "mobileAppName             = "${mobileAppName}
 echo "jenkinsVMPassword         = "${jenkinsVMPassword}
 echo "jenkinsURL                = "${jenkinsURL}.${resourceGroupLocation}.cloudapp.azure.com:8080
 echo "recipientEmail            = "${recipientEmail}
@@ -167,13 +176,16 @@ echo "chatConnectionString      = "${chatConnectionString}
 echo "chatMessageQueue          = "${chatMessageQueue}
 echo "zipPassword"              = "${zipPassword}"
 echo "bingAPIkey"               = "${bingAPIkey}"
+echo "azureTenant"              = "${azureTenant}"
 echo "=========================================="
 
 #login to azure using your credentials
 echo "Username: $azureUserName"
 echo "Password: $azurePassword"
 echo "Command will be az login -u $azureUserName -p $azurePassword"
-az login --username=$azureUserName --password=$azurePassword
+#az login --username=$azureUserName --password=$azurePassword
+az login --service-principal --username=$azureUserName --password=$azurePassword --tenant=$azureTenant
+#az login --username=joalmeid@microsoft.com --password=Xaxaog45.
 
 #set the default subscription id
 echo "Setting subscription to $subscriptionId..."
@@ -226,7 +238,7 @@ kvstore set ${teamName}${teamNumber} sqlServerPassword ${sqlServerPassword}
 kvstore set ${teamName}${teamNumber} sqlDbName ${sqlDBName}
 kvstore set ${teamName}${teamNumber} teamFiles /home/azureuser/team_env/${teamName}${teamNumber}
 kvstore set ${teamName}${teamNumber} jenkinsVMPassword ${jenkinsVMPassword}
-kvstore set ${teamName}${teamNumber} jenkinsURL ${jenkinsURL}.${resourceGroupLocation}.cloudapp.azure.com
+kvstore set ${teamName}${teamNumber} jenkinsURL ${jenkinsURL}.${resourceGroupLocation}.cloudapp.azure.com:8080
 
 az configure --defaults 'output=json'
 
@@ -237,7 +249,7 @@ echo "1-Provision ACR  (bash ./provision_acr.sh -i $subscriptionId -g $resourceG
 bash ./provision_acr.sh -i $subscriptionId -g $resourceGroupTeam -r $registryName -l $resourceGroupLocation
 
 echo "2-Provision AKS  (bash ./provision_aks.sh -i $subscriptionId -g $resourceGroupTeam -c $clusterName -l $resourceGroupLocation)"
-bash ./provision_aks.sh -i $subscriptionId -g $resourceGroupTeam -c $clusterName -l $resourceGroupLocation
+bash ./provision_aks.sh -i $subscriptionId -g $resourceGroupTeam -c $clusterName -l $resourceGroupLocation -s $azureUserName -p $azurePassword
 
 echo "5-Clone repo"
 bash ./git_fetch.sh -u https://github.com/Azure-Samples/openhack-devops-team -s ./test_fetch_build
@@ -245,8 +257,8 @@ bash ./git_fetch.sh -u https://github.com/Azure-Samples/openhack-devops-team -s 
 echo "6-Deploy ingress  (bash ./deploy_ingress_dns.sh -s ./test_fetch_build -l $resourceGroupLocation -n ${teamName}${teamNumber})"
 bash ./deploy_ingress_dns.sh -s ./test_fetch_build -l $resourceGroupLocation -n ${teamName}${teamNumber}
 
-echo "7-Provision SQL (bash ./provision_sql.sh -s ./test_fetch_build -g $resourceGroupTeam -l $resourceGroupLocation -q $sqlServerName -k $keyVaultName -u $sqlServerUsername -p $sqlServerPassword -d $sqlDBName)"
-bash ./provision_sql.sh -g $resourceGroupTeam -l $resourceGroupLocation -q $sqlServerName -k $keyVaultName -u $sqlServerUsername -p $sqlServerPassword -d $sqlDBName
+echo "7-Provision SQL & Mobile App  (bash ./provision_sql_mobileapp.sh -s ./test_fetch_build -g $resourceGroupTeam -l $resourceGroupLocation -q $sqlServerName -m $mobileAppName -h $hostingPlanName -k $keyVaultName -u $sqlServerUsername -p $sqlServerPassword -d $sqlDBName)"
+bash ./provision_sql_mobileapp.sh -g $resourceGroupTeam -l $resourceGroupLocation -q $sqlServerName -m $mobileAppName -h $hostingPlanName -k $keyVaultName -u $sqlServerUsername -p $sqlServerPassword -d $sqlDBName
 
 echo "8-Configure SQL  (bash ./configure_sql.sh -s ./test_fetch_build -g $resourceGroupTeam -u $sqlServerUsername -n ${teamName}${teamNumber} -k $keyVaultName -d $sqlDBName)"
 bash ./configure_sql.sh -s ./test_fetch_build -g $resourceGroupTeam -u $sqlServerUsername -n ${teamName}${teamNumber} -k $keyVaultName -d $sqlDBName

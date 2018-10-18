@@ -185,7 +185,7 @@ echo "1-Provision ACR  (bash ./provision_acr.sh -i $subscriptionId -g $resourceG
 bash ../provision-team/provision_acr.sh -i $subscriptionId -g $resourceGroupProctor -r $registryName -l $resourceGroupLocation
 
 echo "2-Provision AKS  (bash ./provision_aks.sh -i $subscriptionId -g $resourceGroupProctor -c $clusterName -l $resourceGroupLocation)"
-bash ../provision-team/provision_aks.sh -i $subscriptionId -g $resourceGroupProctor -c $clusterName -l $resourceGroupLocation
+bash ../provision-team/provision_aks.sh -i $subscriptionId -g $resourceGroupProctor -c $clusterName -l $resourceGroupLocation -s $azureUserName -p $azurePassword 
 
 echo "3-Deploy ingress  (bash ./deploy_ingress_dns.sh -s . -l $resourceGroupLocation -n ${proctorName}${proctorNumber})"
 bash ./deploy_ingress_dns.sh -s . -l $resourceGroupLocation -n ${proctorName}${proctorNumber}

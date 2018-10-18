@@ -6,15 +6,18 @@ IFS=$'\n\t'
 # -o: prevents errors in a pipeline from being masked
 # IFS new value is less likely to cause confusing bugs when looping arrays or arguments (e.g. $@)
 
-usage() { echo "Usage: provision_aks.sh -i <subscriptionId> -g <resourceGroupName> -c <clusterName> -l <resourceGroupLocation>" 1>&2; exit 1; }
+#usage() { echo "Usage: provision_aks.sh -i <subscriptionId> -g <resourceGroupName> -c <clusterName> -l <resourceGroupLocation>" 1>&2; exit 1; }
+usage() { echo "Usage: provision_aks.sh -i <subscriptionId> -g <resourceGroupName> -c <clusterName> -l <resourceGroupLocation> -s <servicePrincipal> -p <clientSecret>" 1>&2; exit 1; }
 
 declare subscriptionId=""
 declare resourceGroupName=""
 declare clusterName=""
 declare resourceGroupLocation=""
+declare servicePrincipal=""
+declare clientSecret=""
 
 # Initialize parameters specified from command line
-while getopts ":i:g:c:l:" arg; do
+while getopts ":i:g:c:l:s:p:" arg; do
     case "${arg}" in
         i)
             subscriptionId=${OPTARG}
@@ -27,6 +30,12 @@ while getopts ":i:g:c:l:" arg; do
         ;;
         l)
             resourceGroupLocation=${OPTARG}
+        ;;
+	    s)
+            servicePrincipal=${OPTARG}
+        ;;
+        p)
+            clientSecret=${OPTARG}
         ;;
     esac
 done
@@ -74,11 +83,19 @@ fi
 
 teamName=${resourceGroupName:0:-2}
 
-echo "Creating ServicePrincipal for AKS Cluster.."
-export SP_JSON=`az ad sp create-for-rbac --role="Contributor"`
-export SP_NAME=`echo $SP_JSON | jq -r '.name'`
-export SP_PASS=`echo $SP_JSON | jq -r '.password'`
-export SP_ID=`echo $SP_JSON | jq -r '.appId'`
+if [ -z "$servicePrincipal" ] || [ -z "$clientSecret" ]; then
+    echo "Creating ServicePrincipal for AKS Cluster.."
+    export SP_JSON=`az ad sp create-for-rbac --role="Contributor"`
+    export SP_NAME=`echo $SP_JSON | jq -r '.name'`
+    export SP_PASS=`echo $SP_JSON | jq -r '.password'`
+    export SP_ID=`echo $SP_JSON | jq -r '.appId'`
+else
+    echo "Using provisioned ServicePrincipal for AKS Cluster.."
+    export SP_NAME=${servicePrincipal}
+    export SP_PASS=${clientSecret}
+    export SP_ID=`az ad sp show --id ${SP_NAME} | jq -r '.appId'`
+fi
+
 echo "Service Principal Name: " $SP_NAME
 echo "Service Principal Password: " $SP_PASS
 echo "Service Principal Id: " $SP_ID
@@ -108,6 +125,7 @@ fi
 echo "Creating AKS Cluster..."
 (
     set -x
+#    az aks create -g $resourceGroupName -n $clusterName -l $resourceGroupLocation --node-count 3 --generate-ssh-keys -k 1.11.2 --service-principal $SP_ID --client-secret $SP_PASS
     az aks create -g $resourceGroupName -n $clusterName -l $resourceGroupLocation --node-count 3 --generate-ssh-keys -k 1.11.2 --service-principal $SP_ID --client-secret $SP_PASS
 )
 
